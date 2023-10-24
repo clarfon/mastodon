@@ -112,6 +112,8 @@ ActiveRecord::Schema[7.0].define(version: 2023_09_07_150100) do
     t.boolean "keep_media", default: false, null: false
     t.boolean "keep_self_fav", default: true, null: false
     t.boolean "keep_self_bookmark", default: true, null: false
+    t.boolean "keep_self_parents", default: true, null: false
+    t.boolean "keep_self_children", default: true, null: false
     t.integer "min_favs"
     t.integer "min_reblogs"
     t.datetime "created_at", null: false

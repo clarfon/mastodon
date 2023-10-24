@@ -14,6 +14,8 @@
 #  keep_media         :boolean          default(FALSE), not null
 #  keep_self_fav      :boolean          default(TRUE), not null
 #  keep_self_bookmark :boolean          default(TRUE), not null
+#  keep_self_parents  :boolean          default(TRUE), not null
+#  keep_self_children :boolean          default(TRUE), not null
 #  min_favs           :integer
 #  min_reblogs        :integer
 #  created_at         :datetime         not null
@@ -67,6 +69,7 @@ class AccountStatusesCleanupPolicy < ApplicationRecord
     scope.merge!(without_media_scope) if keep_media?
     scope.merge!(without_self_fav_scope) if keep_self_fav?
     scope.merge!(without_self_bookmark_scope) if keep_self_bookmark?
+    scope.merge!(without_threads) if keep_self_parents || keep_self_children
 
     scope.reorder(id: :asc).limit(limit)
   end
@@ -109,6 +112,8 @@ class AccountStatusesCleanupPolicy < ApplicationRecord
       return unless keep_self_fav?
     when :unpin
       return unless keep_pinned?
+    when :reply
+      return unless keep_self_parents?
     end
 
     record_last_inspected(status.id)
@@ -169,6 +174,24 @@ class AccountStatusesCleanupPolicy < ApplicationRecord
     scope = scope.where('COALESCE(status_stats.reblogs_count, 0) < ?', min_reblogs) unless min_reblogs.nil?
     scope = scope.where('COALESCE(status_stats.favourites_count, 0) < ?', min_favs) unless min_favs.nil?
     scope
+  end
+
+  def without_threads
+    scope = Status.joins('LEFT OUTER JOIN statuses replies ON statuses.conversation_id = replies.conversation_id AND statuses.id != replies.id')
+
+    if keep_self_parents && !keep_self_children
+      # including unthreaded, excluding parents, including children
+      scope.where('replies.id IS NULL OR replies.created_at >= statuses.created_at')
+
+    elsif !keep_self_parents && keep_self_children
+      # including unthreaded, including parents, excluding children
+      scope.where('replies.id IS NULL OR replies.created_at <= statuses.created_at')
+
+    elsif keep_self_parents && keep_self_children
+      # including unthreaded, excluding parents, excluding children
+      scope.where(replies: { id: null })
+
+    end
   end
 
   def account_statuses
